@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <color name="royal_purple">#6A0DAD</color>
+    <color name="purple_dark">#4B0082</color>
+    <color name="purple_light">#9B59B6</color>
+    <color name="purple_accent">#BB6BD9</color>
+    <color name="purple_primary">#6A0DAD</color>
+    <color name="facebook_blue">#1877F2</color>
+    <color name="gray_light">#E0E0E0</color>
+    <color name="gray_dark">#757575</color>
+
+
+
+    <color name="white">#FFFFFF</color>
+    <color name="black">#000000</color>
+    <color name="grey_light">#F5F5F5</color>
+    <color name="grey_medium">#9E9E9E</color>
+    <color name="grey_dark">#424242</color>
+
+
+    <color name="success">#4CAF50</color>
+    <color name="warning">#FFC107</color>
+    <color name="error">#F44336</color>
+
+
+    <color name="background_light">#FAFAFA</color>
+    <color name="card_background">#FFFFFF</color>
+    <color name="bottom_nav_bg">#FFFFFF</color>
+
+
+    <color name="text_primary">#212121</color>
+    <color name="text_secondary">#757575</color>
+    <color name="text_hint">#BDBDBD</color>
+</resources>

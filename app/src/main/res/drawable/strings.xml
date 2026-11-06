@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <resources>
+        <string name="app_name">LocalThreads</string>
+        <string name="app_logo">LocalThreads Logo</string>
+
+        <!-- Splash Screen Strings -->
+        <string name="discover_local_fashion">Discover Local Fashion</string>
+        <string name="subtitle_xhosa">Fumanisa iFashoni yaseKhaya</string>
+        <string name="subtitle_zulu">Thola Imfashoni Yasekhaya</string>
+        <string name="get_started">Get Started</string>
+        <string name="languages">English | isiXhosa | isiZulu</string>
+        <string name="english">English</string>
+        <string name="isi_xhosa">isiXhosa</string>
+        <string name="isi_zulu">isiZulu</string>
+
+        <!-- Login/Registration Strings -->
+        <string name="email">Email</string>
+        <string name="password">Password</string>
+        <string name="login">Login</string>
+        <string name="forgot_password">Forgot Password?</string>
+        <string name="create_account">Create Account</string>
+        <string name="continue_with_google">Continue with Google</string>
+        <string name="continue_with_facebook">Continue with Facebook</string>
+        <string name="or">or</string>
+
+        <!-- Home Screen Strings -->
+        <string name="search_local_fashion">Search Local Fashion...</string>
+        <string name="all">All</string>
+        <string name="new_items">New</string>
+        <string name="second_hand">Second-hand</string>
+        <string name="t_shirts">T-Shirts</string>
+        <string name="dresses">Dresses</string>
+        <string name="recommended_for_you">Recommended for You</string>
+        <string name="trending_in_your_area">Trending in Your Area</string>
+        <string name="popular_in_this_category">Popular in This Category</string>
+        <string name="see_all">See All</string>
+        <string name="home">Home</string>
+        <string name="search">Search</string>
+        <string name="cart">Cart</string>
+        <string name="wishlist">Wishlist</string>
+        <string name="profile">Profile</string>
+        <string name="menu">Menu</string>
+        <string name="language">Language</string>
+        <string name="notifications">Notifications</string>
+
+        <!-- Product Card Strings -->
+        <string name="product_image">Product Image</string>
+        <string name="product_name_placeholder">Product Name</string>
+        <string name="price_placeholder">R0.00</string>
+        <string name="seller_name_placeholder">Seller Name</string>
+        <string name="rating_placeholder">0.0</string>
+        <string name="verified_seller">Verified Seller</string>
+    </resources>
+
+</selector>

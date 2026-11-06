@@ -1,0 +1,15 @@
+<resources>
+    <string name="app_name">ECommerceApp</string>
+    <string name="discover_local_fashion">Discover Local Fashion</string>
+    <string name="subtitle_xhosa">Fumanisa iFashoni yaseKhaya</string>
+    <string name="subtitle_zulu">Thola Imfashoni Yasekhaya</string>
+    <string name="languages">English   |   isiXhosa   |   isiZulu</string>
+    <string name="get_started">Get Started</string>
+    <string name="create_account" />
+    <string name="ltlogo" />
+    <string name="email" />
+    <string name="password" />
+    <string name="login" />
+    <string name="forgot_password" />
+    <string name="default_web_client_id">545333815961-i0pl170hindu55er984seli3q77mdjf5.apps.googleusercontent.com</string>
+</resources>
