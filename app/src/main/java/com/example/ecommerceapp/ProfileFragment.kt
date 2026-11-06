@@ -69,11 +69,13 @@ class ProfileFragment : Fragment() {
         }
 
         binding.btnNotifications.setOnClickListener {
-            Toast.makeText(requireContext(), "Notifications clicked", Toast.LENGTH_SHORT).show()
+            val intent = Intent(requireActivity(), Notifications::class.java)
+            startActivity(intent)
         }
 
         binding.btnPrivacy.setOnClickListener {
-            Toast.makeText(requireContext(), "Privacy Policy clicked", Toast.LENGTH_SHORT).show()
+            val intent = Intent(requireActivity(), PrivacyPolicy::class.java)
+            startActivity(intent)
         }
 
         binding.btnLogout.setOnClickListener {

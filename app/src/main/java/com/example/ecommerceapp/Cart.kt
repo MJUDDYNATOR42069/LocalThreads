@@ -93,7 +93,18 @@ class Cart : AppCompatActivity() {
 
 
         binding.btnCheckout.setOnClickListener {
-            val intent = Intent(this, Checkout::class.java)
+            val subtotal = (productPrice1 * quantity1) + (productPrice2 * quantity2)
+            val total = subtotal + (subtotal * taxRate) + deliveryFee
+            val items = arrayListOf<String>()
+            if (quantity1 > 0) items.add("Stylish Black Coat x$quantity1")
+            if (quantity2 > 0) items.add("Casual Blue Dress x$quantity2")
+
+            val intent = Intent(this, Checkout::class.java).apply {
+                putExtra(Checkout.EXTRA_SUBTOTAL, subtotal)
+                putExtra(Checkout.EXTRA_TAX, subtotal * taxRate)
+                putExtra(Checkout.EXTRA_TOTAL, total)
+                putStringArrayListExtra(Checkout.EXTRA_ITEMS, items)
+            }
             startActivity(intent)
         }
 

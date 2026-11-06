@@ -43,6 +43,11 @@ class MainActivity : AppCompatActivity() {
                     return@setOnItemSelectedListener false
                 }
 
+                R.id.nav_orders -> {
+                    startActivity(Intent(this, Orders::class.java))
+                    return@setOnItemSelectedListener false
+                }
+
                 // Wishlist Fragment
                 R.id.nav_wishlist -> selectedFragment = WishlistFragment()
 

@@ -1,5 +1,7 @@
 package com.example.ecommerceapp
 
+import android.app.AlertDialog
+import android.content.Intent
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -9,6 +11,7 @@ import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.ecommerceapp.databinding.ActivityHomeFragmentBinding
+import com.example.ecommerceapp.helpers.LocalHelper
 
 class HomeFragment : Fragment() {
 
@@ -30,29 +33,32 @@ class HomeFragment : Fragment() {
         setupButtons()
         setupSearch()
         setupCategoryChips()
+        setupLanguageSelector()
     }
 
+    // ---------------------------------------------------------------
+    // RecyclerViews — now pull from ProductRepository so data is shared
+    // ---------------------------------------------------------------
     private fun setupRecyclerViews() {
-        // Recommended products
         binding.rvRecommended.layoutManager =
             LinearLayoutManager(requireContext(), LinearLayoutManager.HORIZONTAL, false)
+        binding.rvRecommended.adapter = ProductAdapter(ProductRepository.recommended)
 
-        // Trending products
         binding.rvTrending.layoutManager =
             LinearLayoutManager(requireContext(), LinearLayoutManager.HORIZONTAL, false)
+        binding.rvTrending.adapter = ProductAdapter(ProductRepository.trending)
 
-        // Popular products
         binding.rvPopular.layoutManager =
             GridLayoutManager(requireContext(), 2)
+        binding.rvPopular.adapter = ProductAdapter(ProductRepository.popular)
     }
 
+    // ---------------------------------------------------------------
+    // Buttons — "See All" now navigates to ProductListActivity
+    // ---------------------------------------------------------------
     private fun setupButtons() {
         binding.btnMenu.setOnClickListener {
             Toast.makeText(requireContext(), "Menu clicked", Toast.LENGTH_SHORT).show()
-        }
-
-        binding.btnLanguage.setOnClickListener {
-            Toast.makeText(requireContext(), "Language clicked", Toast.LENGTH_SHORT).show()
         }
 
         binding.btnProfile.setOnClickListener {
@@ -60,18 +66,44 @@ class HomeFragment : Fragment() {
         }
 
         binding.tvSeeAllRecommended.setOnClickListener {
-            Toast.makeText(requireContext(), "Recommended products", Toast.LENGTH_SHORT).show()
+            openProductList(ProductListActivity.CATEGORY_RECOMMENDED)
         }
 
         binding.tvSeeAllTrending.setOnClickListener {
-            Toast.makeText(requireContext(), "Trending products", Toast.LENGTH_SHORT).show()
+            openProductList(ProductListActivity.CATEGORY_TRENDING)
         }
 
         binding.tvSeeAllPopular.setOnClickListener {
-            Toast.makeText(requireContext(), "Popular products", Toast.LENGTH_SHORT).show()
+            openProductList(ProductListActivity.CATEGORY_POPULAR)
         }
     }
 
+    // ---------------------------------------------------------------
+    // Language selector (unchanged behaviour)
+    // ---------------------------------------------------------------
+    private fun setupLanguageSelector() {
+        binding.btnLanguage.setOnClickListener {
+            val languages = arrayOf("English", "isiXhosa", "isiZulu")
+            AlertDialog.Builder(requireContext())
+                .setTitle("Select Language / Khetha ulwimi")
+                .setItems(languages) { _, which ->
+                    val langCode = when (which) {
+                        0 -> "en"
+                        1 -> "xh"
+                        2 -> "zu"
+                        else -> "en"
+                    }
+                    LocalHelper.saveLanguage(requireContext(), langCode)
+                    LocalHelper.setLocale(requireContext())
+                    requireActivity().recreate()
+                }
+                .show()
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // Search (unchanged behaviour for now)
+    // ---------------------------------------------------------------
     private fun setupSearch() {
         binding.btnSearchIcon.setOnClickListener {
             val searchText = binding.etSearch.text.toString().trim()
@@ -83,26 +115,49 @@ class HomeFragment : Fragment() {
         }
     }
 
+    // ---------------------------------------------------------------
+    // Category chips — open the full list filtered by chip
+    // ---------------------------------------------------------------
     private fun setupCategoryChips() {
         binding.chipAll.setOnClickListener {
-            Toast.makeText(requireContext(), "Showing all products", Toast.LENGTH_SHORT).show()
+            openProductList(ProductListActivity.CATEGORY_ALL)
         }
 
         binding.chipNew.setOnClickListener {
-            Toast.makeText(requireContext(), "Showing new products", Toast.LENGTH_SHORT).show()
+            openChip("New")
         }
 
         binding.chipSecondHand.setOnClickListener {
-            Toast.makeText(requireContext(), "Showing second-hand products", Toast.LENGTH_SHORT).show()
+            openChip("Second-hand")
         }
 
         binding.chipTshirts.setOnClickListener {
-            Toast.makeText(requireContext(), "Showing T-Shirts", Toast.LENGTH_SHORT).show()
+            openChip("T-Shirts")
         }
 
         binding.chipDresses.setOnClickListener {
-            Toast.makeText(requireContext(), "Showing dresses", Toast.LENGTH_SHORT).show()
+            openChip("Dresses")
         }
+    }
+
+    // ---------------------------------------------------------------
+    // Navigation helpers
+    // ---------------------------------------------------------------
+    private fun openProductList(category: String) {
+        startActivity(
+            Intent(requireContext(), ProductListActivity::class.java).apply {
+                putExtra(ProductListActivity.EXTRA_CATEGORY, category)
+            }
+        )
+    }
+
+    private fun openChip(chipLabel: String) {
+        startActivity(
+            Intent(requireContext(), ProductListActivity::class.java).apply {
+                putExtra(ProductListActivity.EXTRA_CATEGORY, ProductListActivity.CATEGORY_ALL)
+                putExtra(ProductListActivity.EXTRA_CHIP, chipLabel)
+            }
+        )
     }
 
     override fun onDestroyView() {

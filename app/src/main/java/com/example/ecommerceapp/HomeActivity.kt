@@ -1,5 +1,8 @@
 package com.example.ecommerceapp
 
+import android.app.AlertDialog
+import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
@@ -7,15 +10,20 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.ecommerceapp.databinding.ActivityHomeFragmentBinding
+import com.example.ecommerceapp.helpers.LocalHelper
 
 class HomeActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityHomeFragmentBinding
 
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(LocalHelper.setLocale(newBase))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        
+
         binding = ActivityHomeFragmentBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
@@ -23,29 +31,32 @@ class HomeActivity : AppCompatActivity() {
         setupButtons()
         setupSearch()
         setupCategoryChips()
+        setupLanguageSelector()
     }
 
+    // ---------------------------------------------------------------
+    // RecyclerViews — same data source as HomeFragment
+    // ---------------------------------------------------------------
     private fun setupRecyclerViews() {
-        // Recommended products
         binding.rvRecommended.layoutManager =
             LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
+        binding.rvRecommended.adapter = ProductAdapter(ProductRepository.recommended)
 
-        // Trending products
         binding.rvTrending.layoutManager =
             LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
+        binding.rvTrending.adapter = ProductAdapter(ProductRepository.trending)
 
-        // Popular products
         binding.rvPopular.layoutManager =
             GridLayoutManager(this, 2)
+        binding.rvPopular.adapter = ProductAdapter(ProductRepository.popular)
     }
 
+    // ---------------------------------------------------------------
+    // Buttons — "See All" navigates to ProductListActivity
+    // ---------------------------------------------------------------
     private fun setupButtons() {
         binding.btnMenu.setOnClickListener {
             Toast.makeText(this, "Menu clicked", Toast.LENGTH_SHORT).show()
-        }
-
-        binding.btnLanguage.setOnClickListener {
-            Toast.makeText(this, "Language clicked", Toast.LENGTH_SHORT).show()
         }
 
         binding.btnProfile.setOnClickListener {
@@ -53,18 +64,44 @@ class HomeActivity : AppCompatActivity() {
         }
 
         binding.tvSeeAllRecommended.setOnClickListener {
-            Toast.makeText(this, "Recommended products", Toast.LENGTH_SHORT).show()
+            openProductList(ProductListActivity.CATEGORY_RECOMMENDED)
         }
 
         binding.tvSeeAllTrending.setOnClickListener {
-            Toast.makeText(this, "Trending products", Toast.LENGTH_SHORT).show()
+            openProductList(ProductListActivity.CATEGORY_TRENDING)
         }
 
         binding.tvSeeAllPopular.setOnClickListener {
-            Toast.makeText(this, "Popular products", Toast.LENGTH_SHORT).show()
+            openProductList(ProductListActivity.CATEGORY_POPULAR)
         }
     }
 
+    // ---------------------------------------------------------------
+    // Language selector
+    // ---------------------------------------------------------------
+    private fun setupLanguageSelector() {
+        binding.btnLanguage.setOnClickListener {
+            val languages = arrayOf("English", "isiXhosa", "isiZulu")
+            AlertDialog.Builder(this)
+                .setTitle("Select Language / Khetha ulwimi")
+                .setItems(languages) { _, which ->
+                    val langCode = when (which) {
+                        0 -> "en"
+                        1 -> "xh"
+                        2 -> "zu"
+                        else -> "en"
+                    }
+                    LocalHelper.saveLanguage(this, langCode)
+                    LocalHelper.setLocale(this)
+                    recreate()
+                }
+                .show()
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // Search
+    // ---------------------------------------------------------------
     private fun setupSearch() {
         binding.btnSearchIcon.setOnClickListener {
             val searchText = binding.etSearch.text.toString().trim()
@@ -76,25 +113,48 @@ class HomeActivity : AppCompatActivity() {
         }
     }
 
+    // ---------------------------------------------------------------
+    // Category chips
+    // ---------------------------------------------------------------
     private fun setupCategoryChips() {
         binding.chipAll.setOnClickListener {
-            Toast.makeText(this, "Showing all products", Toast.LENGTH_SHORT).show()
+            openProductList(ProductListActivity.CATEGORY_ALL)
         }
 
         binding.chipNew.setOnClickListener {
-            Toast.makeText(this, "Showing new products", Toast.LENGTH_SHORT).show()
+            openChip("New")
         }
 
         binding.chipSecondHand.setOnClickListener {
-            Toast.makeText(this, "Showing second-hand products", Toast.LENGTH_SHORT).show()
+            openChip("Second-hand")
         }
 
         binding.chipTshirts.setOnClickListener {
-            Toast.makeText(this, "Showing T-Shirts", Toast.LENGTH_SHORT).show()
+            openChip("T-Shirts")
         }
 
         binding.chipDresses.setOnClickListener {
-            Toast.makeText(this, "Showing dresses", Toast.LENGTH_SHORT).show()
+            openChip("Dresses")
         }
+    }
+
+    // ---------------------------------------------------------------
+    // Navigation helpers
+    // ---------------------------------------------------------------
+    private fun openProductList(category: String) {
+        startActivity(
+            Intent(this, ProductListActivity::class.java).apply {
+                putExtra(ProductListActivity.EXTRA_CATEGORY, category)
+            }
+        )
+    }
+
+    private fun openChip(chipLabel: String) {
+        startActivity(
+            Intent(this, ProductListActivity::class.java).apply {
+                putExtra(ProductListActivity.EXTRA_CATEGORY, ProductListActivity.CATEGORY_ALL)
+                putExtra(ProductListActivity.EXTRA_CHIP, chipLabel)
+            }
+        )
     }
 }

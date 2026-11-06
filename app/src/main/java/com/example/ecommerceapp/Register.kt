@@ -2,22 +2,33 @@ package com.example.ecommerceapp
 
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import android.util.Patterns
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.credentials.CredentialManager
+import androidx.credentials.CustomCredential
+import androidx.credentials.GetCredentialRequest
+import androidx.credentials.exceptions.GetCredentialException
 import com.example.ecommerceapp.databinding.ActivityRegisterBinding
-import com.google.android.gms.auth.api.signin.GoogleSignIn
-import com.google.android.gms.auth.api.signin.GoogleSignInClient
-import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseUser
+import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class Register : AppCompatActivity() {
     private lateinit var binding: ActivityRegisterBinding
     private lateinit var auth: FirebaseAuth
     private lateinit var db: FirebaseFirestore
-    private lateinit var googleSignInClient: GoogleSignInClient
+    private lateinit var credentialManager: CredentialManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -27,11 +38,17 @@ class Register : AppCompatActivity() {
 
         auth = FirebaseAuth.getInstance()
         db = FirebaseFirestore.getInstance()
+        credentialManager = CredentialManager.create(this)
+
+        ViewCompat.setOnApplyWindowInsetsListener(binding.root) { v, insets ->
+            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
+            insets
+        }
 
         setupRegisterButton()
         setupLoginButton()
         setupGoogleButton()
-        setupGoogleSignIn()
     }
 
     private fun setupRegisterButton() {
@@ -44,25 +61,18 @@ class Register : AppCompatActivity() {
 
     private fun setupLoginButton() {
         binding.Login.setOnClickListener {
-            val intent = Intent(this, Login::class.java)
-            startActivity(intent)
+            startActivity(Intent(this, Login::class.java))
             finish()
         }
     }
 
     private fun setupGoogleButton() {
         binding.btnGoogle.setOnClickListener {
-            Toast.makeText(this, "Google registration will be added next", Toast.LENGTH_SHORT).show()
+            signInWithGoogle()
         }
     }
 
-    private fun setupGoogleSignIn() {
-        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestIdToken(getString(R.string.default_web_client_id))
-            .requestEmail()
-            .build()
-        googleSignInClient = GoogleSignIn.getClient(this, gso)
-    }
+
 
     private fun validateInputs(): Boolean {
         val firstName = binding.oFirstName.text.toString().trim()
@@ -124,6 +134,8 @@ class Register : AppCompatActivity() {
         return true
     }
 
+
+
     private fun registerUser() {
         val firstName = binding.oFirstName.text.toString().trim()
         val lastName = binding.oLastName.text.toString().trim()
@@ -134,40 +146,168 @@ class Register : AppCompatActivity() {
         binding.btnRegister.text = "Creating Account..."
 
         auth.createUserWithEmailAndPassword(email, password)
-            .addOnSuccessListener { result ->
-                val user = result.user
+            .addOnCompleteListener(this) { task ->
+                if (!task.isSuccessful) {
+                    // Auth account creation failed (e.g., email already in use)
+                    resetButton()
+                    val msg = task.exception?.message ?: "Registration failed"
+                    Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+                    return@addOnCompleteListener
+                }
+
+                val user = task.result?.user
                 if (user == null) {
                     resetButton()
                     Toast.makeText(this, "Registration failed. Please try again.", Toast.LENGTH_SHORT).show()
-                    return@addOnSuccessListener
+                    return@addOnCompleteListener
                 }
 
-                val userId = user.uid
-                val userData = hashMapOf(
-                    "userId" to userId,
-                    "firstName" to firstName,
-                    "lastName" to lastName,
-                    "email" to email,
-                    "role" to "customer"
-                )
+                saveUserProfile(user, firstName, lastName, email, "customer")
+            }
+    }
 
-                db.collection("users")
-                    .document(userId)
-                    .set(userData)
-                    .addOnSuccessListener {
-                        Toast.makeText(this, "Account created successfully", Toast.LENGTH_SHORT).show()
-                        startActivity(Intent(this, MainActivity::class.java))
-                        finish()
-                    }
-                    .addOnFailureListener {
-                        resetButton()
-                        Toast.makeText(this, "Account created, but user information could not be saved", Toast.LENGTH_LONG).show()
-                    }
+
+
+    private fun signInWithGoogle() {
+        val googleIdOption = GetGoogleIdOption.Builder()
+            .setFilterByAuthorizedAccounts(false)
+            .setServerClientId(getString(R.string.default_web_client_id))
+            .build()
+
+        val request = GetCredentialRequest.Builder()
+            .addCredentialOption(googleIdOption)
+            .build()
+
+        CoroutineScope(Dispatchers.Main).launch {
+            try {
+                val result = credentialManager.getCredential(this@Register, request)
+                handleGoogleCredential(result.credential)
+            } catch (e: GetCredentialException) {
+                Log.e("Register", "Credential error: ${e.message}")
+                Toast.makeText(this@Register, "Google sign-in failed: ${e.message}", Toast.LENGTH_SHORT).show()
             }
-            .addOnFailureListener { exception ->
-                resetButton()
-                Toast.makeText(this, exception.message ?: "Registration failed", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun handleGoogleCredential(credential: androidx.credentials.Credential) {
+        if (credential is CustomCredential &&
+            credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
+        ) {
+            try {
+                val googleIdToken = GoogleIdTokenCredential.createFrom(credential.data).idToken
+                val firebaseCredential = GoogleAuthProvider.getCredential(googleIdToken, null)
+
+                auth.signInWithCredential(firebaseCredential)
+                    .addOnCompleteListener(this) { task ->
+                        if (!task.isSuccessful) {
+                            resetButton()
+                            Toast.makeText(
+                                this,
+                                "Google auth failed: ${task.exception?.message}",
+                                Toast.LENGTH_LONG
+                            ).show()
+                            return@addOnCompleteListener
+                        }
+
+                        val user = task.result?.user ?: return@addOnCompleteListener
+
+                        // Derive first/last name from Google display name if available
+                        val displayName = user.displayName ?: ""
+                        val parts = displayName.split(" ", limit = 2)
+                        val firstName = parts.getOrNull(0) ?: ""
+                        val lastName = parts.getOrNull(1) ?: ""
+                        val email = user.email ?: ""
+
+                        saveUserProfile(user, firstName, lastName, email, "customer")
+                    }
+            } catch (e: Exception) {
+                Log.e("Register", "Error parsing Google credential: ${e.message}")
+                Toast.makeText(this, "Google sign-in parsing failed", Toast.LENGTH_SHORT).show()
             }
+        } else {
+            Toast.makeText(this, "Unexpected credential type", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+
+    private fun saveUserProfile(
+        user: FirebaseUser,
+        firstName: String,
+        lastName: String,
+        email: String,
+        role: String
+    ) {
+        val userId = user.uid
+        val userDocRef = db.collection("users").document(userId)
+
+        // Check if profile already exists to avoid clobbering
+        userDocRef.get()
+            .addOnSuccessListener { snapshot ->
+                if (snapshot.exists()) {
+                    // Profile already exists — merge to fill gaps without overwriting role
+                    val updates = mutableMapOf<String, Any>()
+                    if (snapshot.getString("firstName").isNullOrEmpty() && firstName.isNotEmpty()) {
+                        updates["firstName"] = firstName
+                    }
+                    if (snapshot.getString("lastName").isNullOrEmpty() && lastName.isNotEmpty()) {
+                        updates["lastName"] = lastName
+                    }
+                    if (snapshot.getString("email").isNullOrEmpty() && email.isNotEmpty()) {
+                        updates["email"] = email
+                    }
+                    if (snapshot.getString("role").isNullOrEmpty()) {
+                        updates["role"] = role
+                    }
+                    if (snapshot.getString("userId").isNullOrEmpty()) {
+                        updates["userId"] = userId
+                    }
+
+                    if (updates.isEmpty()) {
+                        navigateToHome()
+                    } else {
+                        userDocRef.update(updates)
+                            .addOnSuccessListener { navigateToHome() }
+                            .addOnFailureListener { e ->
+                                handleProfileSaveFailure(e)
+                            }
+                    }
+                } else {
+                    val userData = hashMapOf(
+                        "userId" to userId,
+                        "firstName" to firstName,
+                        "lastName" to lastName,
+                        "email" to email,
+                        "role" to role
+                    )
+                    userDocRef.set(userData)
+                        .addOnSuccessListener { navigateToHome() }
+                        .addOnFailureListener { e ->
+                            handleProfileSaveFailure(e)
+                        }
+                }
+            }
+            .addOnFailureListener { e ->
+                handleProfileSaveFailure(e)
+            }
+    }
+
+    private fun handleProfileSaveFailure(e: Exception) {
+        resetButton()
+        Log.e("Register", "Firestore profile save failed", e)
+        Toast.makeText(
+            this,
+            "Account created, but profile could not be saved: ${e.message}",
+            Toast.LENGTH_LONG
+        ).show()
+        // Do NOT navigate — user needs to fix Firestore rules / network and retry
+    }
+
+    private fun navigateToHome() {
+        Toast.makeText(this, "Account ready!", Toast.LENGTH_SHORT).show()
+        val intent = Intent(this, MainActivity::class.java)
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        startActivity(intent)
+        finish()
     }
 
     private fun resetButton() {

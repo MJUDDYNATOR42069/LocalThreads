@@ -1,70 +1,53 @@
-@file:Suppress("DEPRECATION")
-
 package com.example.ecommerceapp
 
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
+import android.util.Patterns
 import android.widget.Toast
-import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
+import androidx.lifecycle.lifecycleScope
+import androidx.credentials.CredentialManager
+import androidx.credentials.CustomCredential
+import androidx.credentials.GetCredentialRequest
+import androidx.credentials.exceptions.GetCredentialException
 import com.example.ecommerceapp.databinding.ActivityLoginBinding
-import com.google.android.gms.auth.api.signin.GoogleSignIn
-import com.google.android.gms.auth.api.signin.GoogleSignInClient
-import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 class Login : AppCompatActivity() {
 
     private lateinit var binding: ActivityLoginBinding
     private lateinit var auth: FirebaseAuth
     private lateinit var db: FirebaseFirestore
-    private lateinit var googleSignInClient: GoogleSignInClient
-
-    companion object {
-        private const val RC_GOOGLE_SIGN_IN = 9001
-    }
+    private lateinit var credentialManager: CredentialManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
-        
+
         binding = ActivityLoginBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        
+
         auth = FirebaseAuth.getInstance()
         db = FirebaseFirestore.getInstance()
-
-        ViewCompat.setOnApplyWindowInsetsListener(binding.main) { v, insets ->
-            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
-            insets
-        }
+        credentialManager = CredentialManager.create(this)
 
         setupListeners()
-        setupGoogleSignIn()
     }
 
     private fun setupListeners() {
+
         binding.btnLogin.setOnClickListener {
-            val email = binding.Email.text.toString().trim()
-            val password = binding.Password.text.toString().trim()
-
-            if (email.isEmpty() || password.isEmpty()) {
-                Toast.makeText(this, "Please fill all fields", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-
-            if (validateInputs(email, password)) {
-                signInWithEmail(email, password)
-            }
+            loginWithEmail()
         }
 
         binding.btnGoogleSignIn.setOnClickListener {
-            val signInIntent = googleSignInClient.signInIntent
-            startActivityForResult(signInIntent, RC_GOOGLE_SIGN_IN)
+            signInWithGoogle()
         }
 
         binding.CreateAccount.setOnClickListener {
@@ -72,74 +55,233 @@ class Login : AppCompatActivity() {
         }
 
         binding.ForgotPassword.setOnClickListener {
-            // Since ForgotPassword activity is missing, we'll show a toast for now
-            Toast.makeText(this, "Forgot Password clicked", Toast.LENGTH_SHORT).show()
+            sendPasswordReset()
         }
     }
 
-    private fun setupGoogleSignIn() {
-        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestIdToken(getString(R.string.default_web_client_id))
-            .requestEmail()
-            .build()
+    private fun loginWithEmail() {
 
-        googleSignInClient = GoogleSignIn.getClient(this, gso)
-    }
+        val email = binding.Email.text.toString().trim()
+        val password = binding.Password.text.toString()
 
-    private fun validateInputs(email: String, password: String): Boolean {
-        if (email.isEmpty()) {
-            binding.tilEmail.error = "Email required"
-            return false
-        } else {
-            binding.tilEmail.error = null
-        }
-
-        if (password.length < 8) {
-            binding.tilPassword.error = "Password must be at least 8 characters"
-            return false
-        }
-
-        if (!password.any { it.isUpperCase() }) {
-            binding.tilPassword.error = "Password must have at least 1 capital letter"
-            return false
-        }
-
-        if (password.count { it.isDigit() } < 2) {
-            binding.tilPassword.error = "Password must have at least 2 numbers"
-            return false
-        }
-
-        if (!password.any { !it.isLetterOrDigit() }) {
-            binding.tilPassword.error = "Password must have at least 1 special character"
-            return false
-        }
-
+        binding.tilEmail.error = null
         binding.tilPassword.error = null
-        return true
+
+        if (email.isEmpty()) {
+            binding.tilEmail.error = "Email is required"
+            return
+        }
+
+        if (!Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+            binding.tilEmail.error = "Enter a valid email address"
+            return
+        }
+
+        if (password.isEmpty()) {
+            binding.tilPassword.error = "Password is required"
+            return
+        }
+
+        lifecycleScope.launch {
+            setLoading(true)
+
+            try {
+                val result = auth.signInWithEmailAndPassword(email, password).await()
+                val user = result.user
+
+                if (user == null) {
+                    showMessage("Login failed. Please try again.")
+                    return@launch
+                }
+
+                routeUser(user.uid, false)
+
+            } catch (e: Exception) {
+                Log.e("Login", "Email login failed", e)
+                showMessage("Login failed: ${e.localizedMessage}")
+
+            } finally {
+                setLoading(false)
+            }
+        }
     }
 
-    private fun signInWithEmail(email: String, password: String) {
-        auth.signInWithEmailAndPassword(email, password)
-            .addOnCompleteListener(this) { task ->
-                if (task.isSuccessful) {
-                    val intent = if (binding.radioAdmin.isChecked) {
-                        Intent(this, AdminDashboardActivity::class.java)
+    private fun routeUser(uid: String, createCustomerIfMissing: Boolean) {
+
+        lifecycleScope.launch {
+            try {
+                val userDocument = db.collection("users")
+                    .document(uid)
+                    .get()
+                    .await()
+
+                if (!userDocument.exists()) {
+
+                    if (createCustomerIfMissing) {
+                        val currentUser = auth.currentUser
+
+                        val profile = hashMapOf(
+                            "userId" to uid,
+                            "email" to (currentUser?.email ?: ""),
+                            "firstName" to (currentUser?.displayName ?: ""),
+                            "role" to "customer"
+                        )
+
+                        db.collection("users")
+                            .document(uid)
+                            .set(profile)
+                            .await()
+
+                        openDashboard("customer")
                     } else {
-                        Intent(this, MainActivity::class.java)
+                        showMessage(
+                            "Your account profile was not found. Please contact the administrator."
+                        )
                     }
-                    startActivity(intent)
-                    finish()
-                } else {
-                    Toast.makeText(this, "Authentication Failed: ${task.exception?.message}", Toast.LENGTH_SHORT).show()
+
+                    return@launch
                 }
+
+                val role = userDocument.getString("role")
+                    ?.trim()
+                    ?.lowercase()
+
+                if (role.isNullOrEmpty()) {
+                    showMessage("Your account has no assigned role.")
+                    return@launch
+                }
+
+                openDashboard(role)
+
+            } catch (e: Exception) {
+                Log.e("Login", "Could not retrieve user role", e)
+                showMessage("Could not load your account: ${e.localizedMessage}")
+            }
+        }
+    }
+
+    private fun openDashboard(role: String) {
+
+        val destination = when (role) {
+            "admin" -> AdminDashboardActivity::class.java
+            "supplier" -> SupplierDashboard::class.java
+            "customer" -> HomeActivity::class.java
+            else -> {
+                showMessage("Unrecognised account role: $role")
+                return
+            }
+        }
+
+        val intent = Intent(this, destination).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+
+        startActivity(intent)
+        finish()
+    }
+
+    private fun signInWithGoogle() {
+
+        lifecycleScope.launch {
+            setLoading(true)
+
+            try {
+                val googleIdOption = GetGoogleIdOption.Builder()
+                    .setFilterByAuthorizedAccounts(false)
+                    .setServerClientId(
+                        getString(R.string.default_web_client_id)
+                    )
+                    .build()
+
+                val request = GetCredentialRequest.Builder()
+                    .addCredentialOption(googleIdOption)
+                    .build()
+
+                val result = credentialManager.getCredential(
+                    context = this@Login,
+                    request = request
+                )
+
+                val credential = result.credential
+
+                if (
+                    credential is CustomCredential &&
+                    credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
+                ) {
+                    val googleCredential =
+                        GoogleIdTokenCredential.createFrom(credential.data)
+
+                    val firebaseCredential = GoogleAuthProvider.getCredential(
+                        googleCredential.idToken,
+                        null
+                    )
+
+                    val authResult =
+                        auth.signInWithCredential(firebaseCredential).await()
+
+                    val user = authResult.user
+
+                    if (user != null) {
+                        routeUser(user.uid, true)
+                    } else {
+                        showMessage("Google login failed.")
+                    }
+
+                } else {
+                    showMessage("Unexpected Google sign-in credential.")
+                }
+
+            } catch (e: GetCredentialException) {
+                Log.e("Login", "Google credential error", e)
+                showMessage("Google sign-in failed: ${e.localizedMessage}")
+
+            } catch (e: Exception) {
+                Log.e("Login", "Google authentication error", e)
+                showMessage("Google login failed: ${e.localizedMessage}")
+
+            } finally {
+                setLoading(false)
+            }
+        }
+    }
+
+    private fun sendPasswordReset() {
+
+        val email = binding.Email.text.toString().trim()
+
+        if (email.isEmpty()) {
+            binding.tilEmail.error = "Enter your email address first"
+            return
+        }
+
+        if (!Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+            binding.tilEmail.error = "Enter a valid email address"
+            return
+        }
+
+        auth.sendPasswordResetEmail(email)
+            .addOnSuccessListener {
+                showMessage("Password reset email sent.")
+            }
+            .addOnFailureListener { e ->
+                showMessage("Could not send reset email: ${e.localizedMessage}")
             }
     }
 
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == RC_GOOGLE_SIGN_IN) {
-            // Handle Google Sign In result here if needed
-            Toast.makeText(this, "Google Sign In result received", Toast.LENGTH_SHORT).show()
+    private fun setLoading(loading: Boolean) {
+
+        binding.btnLogin.isEnabled = !loading
+        binding.btnGoogleSignIn.isEnabled = !loading
+
+        binding.btnLogin.text = if (loading) {
+            "Please wait..."
+        } else {
+            "Login"
         }
+    }
+
+    private fun showMessage(message: String) {
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
     }
 }

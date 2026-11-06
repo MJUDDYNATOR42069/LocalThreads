@@ -107,7 +107,7 @@
                     android:layout_height="48dp"
                     android:layout_weight="1"
                     android:background="@null"
-                    android:hint="Search Local Fashion..."
+                    android:hint="@string/search_hint"
                     android:paddingHorizontal="12dp"
                     android:textColor="@color/black"
                     android:textColorHint="#888888"
@@ -201,7 +201,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="Recommended for You"
+                        android:text="@string/recommended_for_you"
                         android:textColor="@color/black"
                         android:textSize="18sp"
                         android:textStyle="bold" />
@@ -244,7 +244,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="Trending in Your Area"
+                        android:text="@string/trending_in_your_area"
                         android:textColor="@color/black"
                         android:textSize="18sp"
                         android:textStyle="bold" />
@@ -287,7 +287,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="Popular in This Category"
+                        android:text="@string/popular_in_this_category"
                         android:textColor="@color/black"
                         android:textSize="18sp"
                         android:textStyle="bold" />

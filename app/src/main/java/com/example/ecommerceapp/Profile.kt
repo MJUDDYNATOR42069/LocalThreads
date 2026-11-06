@@ -55,95 +55,35 @@ class Profile : AppCompatActivity() {
 
 
     private fun setupButtons() {
-
-
         binding.btnEditProfile.setOnClickListener {
-
-            Toast.makeText(
-                this,
-                "Edit Profile clicked",
-                Toast.LENGTH_SHORT
-            ).show()
-
-
+            startActivity(Intent(this, EditProfileActivity::class.java))
         }
-
 
         binding.btnMyDashboard.setOnClickListener {
-
-            Toast.makeText(
-                this,
-                "My Dashboard clicked",
-                Toast.LENGTH_SHORT
-            ).show()
-
-
+            startActivity(Intent(this, CustomerDashboard::class.java))
         }
-
 
         binding.btnMyOrders.setOnClickListener {
-
-            Toast.makeText(
-                this,
-                "My Orders clicked",
-                Toast.LENGTH_SHORT
-            ).show()
-
-
+            startActivity(Intent(this, Orders::class.java))
         }
-
 
         binding.btnMyLaybys.setOnClickListener {
-
-            Toast.makeText(
-                this,
-                "My Lay-Bys clicked",
-                Toast.LENGTH_SHORT
-            ).show()
-
-
+            startActivity(Intent(this, Laybys::class.java))
         }
-
 
         binding.btnLanguage.setOnClickListener {
-
-            Toast.makeText(
-                this,
-                "Language settings clicked",
-                Toast.LENGTH_SHORT
-            ).show()
-
-
+            Toast.makeText(this, "Language settings clicked", Toast.LENGTH_SHORT).show()
         }
-
 
         binding.btnNotifications.setOnClickListener {
-
-            Toast.makeText(
-                this,
-                "Notifications clicked",
-                Toast.LENGTH_SHORT
-            ).show()
-
-
+            startActivity(Intent(this, Notifications::class.java))
         }
-
 
         binding.btnPrivacy.setOnClickListener {
-
-            Toast.makeText(
-                this,
-                "Privacy Policy clicked",
-                Toast.LENGTH_SHORT
-            ).show()
-
-
-
+            startActivity(Intent(this, PrivacyPolicy::class.java))
         }
 
-
         binding.btnLogout.setOnClickListener {
-
             logoutUser()
         }
     }

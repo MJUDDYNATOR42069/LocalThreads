@@ -1,0 +1,14 @@
+<resources>
+    <string name="app_name">ECommerceApp</string>
+    <string name="discover_local_fashion">Fumanisa iFashoni yaseKhaya</string>
+    <string name="subtitle_xhosa">Fumanisa iFashoni yaseKhaya</string>
+    <string name="subtitle_zulu">Thola Imfashoni Yasekhaya</string>
+    <string name="languages">English   |   isiXhosa   |   isiZulu</string>
+    <string name="get_started">Qalisa</string>
+    <string name="login">Ngena</string>
+    <string name="forgot_password">Libale iPhasiwedi?</string>
+    <string name="recommended_for_you">EziCetyiswe Kuwe</string>
+    <string name="trending_in_your_area">Ezihamba Phambili Endaweni Yakho</string>
+    <string name="popular_in_this_category">Eyaziwayo Kule Category</string>
+    <string name="search_hint">Khangela iFashoni…</string>
+</resources>
