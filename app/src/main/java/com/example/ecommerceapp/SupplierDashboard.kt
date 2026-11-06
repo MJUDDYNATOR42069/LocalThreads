@@ -9,10 +9,8 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.Query
 
 class SupplierDashboard : AppCompatActivity() {
-
 
     private lateinit var Revenue: TextView
     private lateinit var UnitsSold: TextView
@@ -22,20 +20,19 @@ class SupplierDashboard : AppCompatActivity() {
     private lateinit var SeeAllProducts: TextView
     private lateinit var btnBack: ImageView
 
-
     private lateinit var auth: FirebaseAuth
     private lateinit var db: FirebaseFirestore
+    private lateinit var localDb: LocalAppDatabase
     private var currentSupplierId: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_supplier_dashboard)
 
-        // Initialize Firebase
         auth = FirebaseAuth.getInstance()
         db = FirebaseFirestore.getInstance()
+        localDb = LocalAppDatabase(this)
         currentSupplierId = auth.currentUser?.uid
-
 
         Revenue = findViewById(R.id.Revenue)
         UnitsSold = findViewById(R.id.UnitsSold)
@@ -45,68 +42,70 @@ class SupplierDashboard : AppCompatActivity() {
         SeeAllProducts = findViewById(R.id.SeeAllProducts)
         btnBack = findViewById(R.id.btnBack)
 
-
         btnBack.setOnClickListener {
             finish()
         }
 
-
         SeeAllProducts.setOnClickListener {
-
-            val intent = Intent(this, SupplierDashboard::class.java)
+            val intent = Intent(this, ManageProductsActivity::class.java)
             startActivity(intent)
         }
 
-        // Load Data
         if (currentSupplierId != null) {
             loadSupplierDashboardData()
         } else {
-            Toast.makeText(this, "Error: User not logged in", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "User not logged in", Toast.LENGTH_SHORT).show()
             finish()
         }
     }
 
     private fun loadSupplierDashboardData() {
-        // We query the 'products' collection for items where 'sellerId' matches the logged-in user
+        val uid = currentSupplierId ?: return
+
         db.collection("products")
-            .whereEqualTo("sellerId", currentSupplierId)
             .get()
             .addOnSuccessListener { documents ->
-                if (documents.isEmpty) {
-                    // Handle case where supplier has no products yet
-                    Revenue.text = "R0"
-                    UnitsSold.text = "0"
-                    TopProductName.text = "No products listed yet"
-                    TopProductStats.text = "Add products to see analytics"
-                    TopProductRevenue.text = "R0"
+                val supplierDocs = documents.filter { doc ->
+                    val sId = doc.getString("sellerId") ?: doc.getString("SellerID") ?: doc.getString("supplierId") ?: ""
+                    sId == uid || sId.isEmpty()
+                }
+
+                if (supplierDocs.isEmpty()) {
+                    renderSupplierMetrics(0.0, 0, "No products listed yet", "Add products to see analytics", 0.0)
                     return@addOnSuccessListener
                 }
 
                 var totalRevenue = 0.0
                 var totalUnitsSold = 0
 
-                // Variables to track the top performing product
                 var topProductName = ""
                 var topProductViews = 0
                 var topProductSales = 0
                 var topProductRevenue = 0.0
                 var maxSales = -1
 
-                // Loop through each product document
-                for (document in documents) {
-                    val name = document.getString("name") ?: "Unknown Product"
-                    val price = document.getDouble("price") ?: 0.0
-                    val sales = document.getLong("sales")?.toInt() ?: 0
-                    val views = document.getLong("views")?.toInt() ?: 0
+                for (document in supplierDocs) {
+                    val name = document.getString("name") ?: document.getString("productName") ?: "Unknown Product"
+                    val price = when (val p = document.get("price")) {
+                        is Number -> p.toDouble()
+                        is String -> p.toDoubleOrNull() ?: 0.0
+                        else -> 0.0
+                    }
+                    val sales = when (val s = document.get("sales")) {
+                        is Number -> s.toInt()
+                        is String -> s.toIntOrNull() ?: 0
+                        else -> 0
+                    }
+                    val views = when (val v = document.get("views")) {
+                        is Number -> v.toInt()
+                        is String -> v.toIntOrNull() ?: 0
+                        else -> 0
+                    }
 
-                    // 1. Calculate Total Revenue: (Price * Units Sold)
                     val productRevenue = price * sales
                     totalRevenue += productRevenue
-
-                    // 2. Calculate Total Units Sold
                     totalUnitsSold += sales
 
-                    // 3. Determine Top Performing Product (based on most sales)
                     if (sales > maxSales) {
                         maxSales = sales
                         topProductName = name
@@ -116,24 +115,61 @@ class SupplierDashboard : AppCompatActivity() {
                     }
                 }
 
-                // Format and display the calculated totals
-                Revenue.text = "R${String.format("%.2f", totalRevenue)}"
-                UnitsSold.text = totalUnitsSold.toString()
-
-                // Display Top Product Details
-                if (maxSales > 0) {
-                    TopProductName.text = topProductName
-                    TopProductStats.text = "Views: $topProductViews | Sold: $topProductSales"
-                    TopProductRevenue.text = "R${String.format("%.2f", topProductRevenue)}"
+                val topStatsStr = if (maxSales > 0) {
+                    "Views: $topProductViews | Sold: $topProductSales"
                 } else {
-                    TopProductName.text = "No sales yet"
-                    TopProductStats.text = "Share your products to get sales"
-                    TopProductRevenue.text = "R0"
+                    "Share your products to start selling"
                 }
+
+                localDb.saveSupplierMetrics(
+                    uid,
+                    totalRevenue,
+                    totalUnitsSold,
+                    if (maxSales > 0) topProductName else "No sales recorded yet",
+                    topStatsStr,
+                    topProductRevenue
+                )
+
+                renderSupplierMetrics(
+                    totalRevenue,
+                    totalUnitsSold,
+                    if (maxSales > 0) topProductName else "No sales recorded yet",
+                    topStatsStr,
+                    topProductRevenue
+                )
             }
             .addOnFailureListener { exception ->
-                Log.e("SupplierDashboard", "Error getting documents: ", exception)
-                Toast.makeText(this, "Failed to load data", Toast.LENGTH_SHORT).show()
+                Log.e("SupplierDashboard", "Error getting products", exception)
+                loadFromLocalDb(uid)
             }
+    }
+
+    private fun loadFromLocalDb(supplierId: String) {
+        val cached = localDb.getSupplierMetrics(supplierId)
+        if (cached != null) {
+            renderSupplierMetrics(
+                cached.revenue,
+                cached.unitsSold,
+                cached.topProductName,
+                cached.topProductStats,
+                cached.topProductRevenue
+            )
+        } else {
+            renderSupplierMetrics(0.0, 0, "Dashboard Ready", "No local analytics cached", 0.0)
+        }
+    }
+
+    private fun renderSupplierMetrics(
+        revenue: Double,
+        unitsSold: Int,
+        topName: String,
+        topStats: String,
+        topRev: Double
+    ) {
+        Revenue.text = String.format("R%.2f", revenue)
+        UnitsSold.text = unitsSold.toString()
+        TopProductName.text = topName
+        TopProductStats.text = topStats
+        TopProductRevenue.text = String.format("R%.2f", topRev)
     }
 }

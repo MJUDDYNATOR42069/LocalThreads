@@ -15,6 +15,7 @@ import com.google.firebase.firestore.ListenerRegistration
 class ManageUsersActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityManageUsersBinding
+    private lateinit var localDb: LocalAppDatabase
     private val db = FirebaseFirestore.getInstance()
 
     private lateinit var userAdapter: UserAdapter
@@ -27,6 +28,7 @@ class ManageUsersActivity : AppCompatActivity() {
 
         binding = ActivityManageUsersBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        localDb = LocalAppDatabase(this)
 
         setupRecyclerView()
         setupSearch()
@@ -61,21 +63,17 @@ class ManageUsersActivity : AppCompatActivity() {
                 binding.progressUsers.visibility = View.GONE
 
                 if (error != null) {
-                    Toast.makeText(
-                        this,
-                        "Failed to load users: ${error.message}",
-                        Toast.LENGTH_LONG
-                    ).show()
-                    updateEmptyState()
+                    loadFromLocalDb()
                     return@addSnapshotListener
                 }
 
                 if (snapshot == null) {
-                    updateEmptyState()
+                    loadFromLocalDb()
                     return@addSnapshotListener
                 }
 
                 allUsers.clear()
+                val adminRecords = mutableListOf<AdminRecord>()
 
                 for (document in snapshot.documents) {
                     val user = UserAccount(
@@ -89,10 +87,39 @@ class ManageUsersActivity : AppCompatActivity() {
                     )
 
                     allUsers.add(user)
+                    adminRecords.add(
+                        AdminRecord(
+                            documentId = user.documentId,
+                            title = "${user.firstName} ${user.lastName}".trim(),
+                            subtitle = "${user.email}\nRole: ${user.role}",
+                            status = if (user.accountStatus) "active" else "disabled"
+                        )
+                    )
                 }
 
+                localDb.saveAdminRecords("user", adminRecords)
                 filterUsers(binding.etSearchUsers.text.toString())
             }
+    }
+
+    private fun loadFromLocalDb() {
+        val cachedRecords = localDb.getAdminRecords("user")
+        allUsers.clear()
+        for (rec in cachedRecords) {
+            val nameParts = rec.title.split(" ", limit = 2)
+            allUsers.add(
+                UserAccount(
+                    documentId = rec.documentId,
+                    userId = rec.documentId,
+                    firstName = nameParts.getOrNull(0) ?: "",
+                    lastName = nameParts.getOrNull(1) ?: "",
+                    email = rec.subtitle.substringBefore("\n"),
+                    role = rec.subtitle.substringAfter("Role: ", "customer"),
+                    accountStatus = rec.status == "active"
+                )
+            )
+        }
+        filterUsers(binding.etSearchUsers.text.toString())
     }
 
     private fun setupSearch() {

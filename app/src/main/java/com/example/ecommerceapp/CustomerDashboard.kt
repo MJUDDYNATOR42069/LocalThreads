@@ -10,6 +10,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 class CustomerDashboard : AppCompatActivity() {
 
     private lateinit var binding: ActivityCustomerDashbaordBinding
+    private lateinit var localDb: LocalAppDatabase
 
     private val auth = FirebaseAuth.getInstance()
     private val db = FirebaseFirestore.getInstance()
@@ -19,6 +20,7 @@ class CustomerDashboard : AppCompatActivity() {
 
         binding = ActivityCustomerDashbaordBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        localDb = LocalAppDatabase(this)
 
         setupBackButton()
         loadDashboardData()
@@ -53,31 +55,61 @@ class CustomerDashboard : AppCompatActivity() {
                         is Number -> value.toDouble()
                         else -> 0.0
                     }
-                    totalSpent += amount
-
                     val category = document.getString("category") ?: "Other"
-                    categoryData[category] = (categoryData[category] ?: 0f) + amount.toFloat()
-
                     val status = document.getString("status")?.lowercase() ?: ""
+
+                    totalSpent += amount
+                    categoryData[category] = (categoryData[category] ?: 0f) + amount.toFloat()
                     if (status.contains("layby") || status.contains("lay-by")) {
                         activeLaybys++
                     }
+
+                    localDb.saveUserOrder(document.id, userId, amount, category, status)
                 }
 
-                binding.tvTotalSpent.text = String.format("R%.2f", totalSpent)
-                binding.tvActiveLaybys.text = activeLaybys.toString()
-
-                if (categoryData.isNotEmpty()) {
-                    binding.pieChart.setData(categoryData)
-                    updateCategoryLegend(categoryData)
-                } else {
-                    binding.pieChart.setData(emptyMap())
-                    binding.tvCategoryLegend.text = "No purchases yet"
-                }
+                renderDashboard(totalSpent, activeLaybys, categoryData)
             }
             .addOnFailureListener {
-                Toast.makeText(this, "Unable to load dashboard data", Toast.LENGTH_SHORT).show()
+                loadFromLocalDb(userId)
             }
+    }
+
+    private fun loadFromLocalDb(userId: String) {
+        val cachedOrders = localDb.getUserOrders(userId)
+        if (cachedOrders.isEmpty()) {
+            binding.tvTotalSpent.text = "R0.00"
+            binding.tvActiveLaybys.text = "0"
+            binding.pieChart.setData(emptyMap())
+            binding.tvCategoryLegend.text = "No offline purchases cached"
+            return
+        }
+
+        var totalSpent = 0.0
+        var activeLaybys = 0
+        val categoryData = mutableMapOf<String, Float>()
+
+        for (order in cachedOrders) {
+            totalSpent += order.amount
+            categoryData[order.category] = (categoryData[order.category] ?: 0f) + order.amount.toFloat()
+            if (order.status.contains("layby") || order.status.contains("lay-by")) {
+                activeLaybys++
+            }
+        }
+
+        renderDashboard(totalSpent, activeLaybys, categoryData)
+    }
+
+    private fun renderDashboard(totalSpent: Double, activeLaybys: Int, categoryData: Map<String, Float>) {
+        binding.tvTotalSpent.text = String.format("R%.2f", totalSpent)
+        binding.tvActiveLaybys.text = activeLaybys.toString()
+
+        if (categoryData.isNotEmpty()) {
+            binding.pieChart.setData(categoryData)
+            updateCategoryLegend(categoryData)
+        } else {
+            binding.pieChart.setData(emptyMap())
+            binding.tvCategoryLegend.text = "No purchases yet"
+        }
     }
 
     private fun updateCategoryLegend(categoryData: Map<String, Float>) {

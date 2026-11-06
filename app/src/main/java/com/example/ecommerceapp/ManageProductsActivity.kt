@@ -15,6 +15,7 @@ import com.google.firebase.firestore.ListenerRegistration
 class ManageProductsActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityAdminRecordsBinding
+    private lateinit var localDb: LocalAppDatabase
     private val db = FirebaseFirestore.getInstance()
     private val allRecords = mutableListOf<AdminRecord>()
     private lateinit var adapter: AdminRecordAdapter
@@ -27,6 +28,7 @@ class ManageProductsActivity : AppCompatActivity() {
 
         binding = ActivityAdminRecordsBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        localDb = LocalAppDatabase(this)
 
         binding.tvScreenTitle.text = "Manage Products"
         binding.etSearch.hint = "Search products..."
@@ -61,22 +63,22 @@ class ManageProductsActivity : AppCompatActivity() {
 
                 binding.progressRecords.visibility = View.GONE
 
-                if (error != null) {
-                    showMessage("Could not load products: ${error.message}")
+                if (error != null || snapshot == null) {
+                    loadFromLocalDb()
                     return@addSnapshotListener
                 }
 
                 allRecords.clear()
                 productStatuses.clear()
 
-                snapshot?.documents?.forEach { document ->
+                snapshot.documents.forEach { document ->
 
-                    val name = document.getString("productName") ?: "Unnamed Product"
+                    val name = document.getString("productName") ?: document.getString("name") ?: "Unnamed Product"
                     val brand = document.getString("brand") ?: "Unknown brand"
-                    val sellerId = document.get("SellerID")?.toString() ?: "Unknown seller"
-                    val price = document.getDouble("price")?.toString() ?: "0.00"
+                    val sellerId = document.get("SellerID")?.toString() ?: document.get("sellerId")?.toString() ?: "Unknown seller"
+                    val price = document.get("price")?.toString() ?: "0.00"
                     val stock = document.get("stock")?.toString() ?: "0"
-                    val status = document.getBoolean("status") ?: false
+                    val status = document.getBoolean("status") ?: true
 
                     productStatuses[document.id] = status
 
@@ -91,8 +93,20 @@ class ManageProductsActivity : AppCompatActivity() {
                     )
                 }
 
+                localDb.saveAdminRecords("product", allRecords)
                 filterRecords(binding.etSearch.text.toString())
             }
+    }
+
+    private fun loadFromLocalDb() {
+        val cached = localDb.getAdminRecords("product")
+        allRecords.clear()
+        productStatuses.clear()
+        for (rec in cached) {
+            allRecords.add(rec)
+            productStatuses[rec.documentId] = (rec.status == "Active")
+        }
+        filterRecords(binding.etSearch.text.toString())
     }
 
     private fun filterRecords(query: String) {

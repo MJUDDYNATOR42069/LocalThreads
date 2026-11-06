@@ -18,6 +18,7 @@ import com.google.firebase.firestore.ListenerRegistration
 class VerifySellersActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityAdminRecordsBinding
+    private lateinit var localDb: LocalAppDatabase
     private val db = FirebaseFirestore.getInstance()
     private val allRecords = mutableListOf<AdminRecord>()
     private lateinit var adapter: AdminRecordAdapter
@@ -28,6 +29,7 @@ class VerifySellersActivity : AppCompatActivity() {
 
         binding = ActivityAdminRecordsBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        localDb = LocalAppDatabase(this)
 
         binding.tvScreenTitle.text = "Verify Sellers"
         binding.etSearch.hint = "Search seller applications..."
@@ -63,18 +65,18 @@ class VerifySellersActivity : AppCompatActivity() {
 
                 binding.progressRecords.visibility = View.GONE
 
-                if (error != null) {
-                    showMessage("Could not load applications: ${error.message}")
+                if (error != null || snapshot == null) {
+                    loadFromLocalDb()
                     return@addSnapshotListener
                 }
 
                 allRecords.clear()
 
-                snapshot?.documents?.forEach { document ->
+                snapshot.documents.forEach { document ->
 
-                    val storeName = document.getString("storename") ?: "Unnamed Store"
+                    val storeName = document.getString("storename") ?: document.getString("storeName") ?: "Unnamed Store"
                     val email = document.getString("email") ?: "No email"
-                    val description = document.getString("Description") ?: ""
+                    val description = document.getString("Description") ?: document.getString("description") ?: ""
                     val status = document.getString("status") ?: "pending"
 
                     allRecords.add(
@@ -89,8 +91,16 @@ class VerifySellersActivity : AppCompatActivity() {
                     )
                 }
 
+                localDb.saveAdminRecords("seller", allRecords)
                 filterRecords(binding.etSearch.text.toString())
             }
+    }
+
+    private fun loadFromLocalDb() {
+        val cached = localDb.getAdminRecords("seller")
+        allRecords.clear()
+        allRecords.addAll(cached)
+        filterRecords(binding.etSearch.text.toString())
     }
 
     private fun filterRecords(query: String) {

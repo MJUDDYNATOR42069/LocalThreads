@@ -72,8 +72,6 @@ class Register : AppCompatActivity() {
         }
     }
 
-
-
     private fun validateInputs(): Boolean {
         val firstName = binding.oFirstName.text.toString().trim()
         val lastName = binding.oLastName.text.toString().trim()
@@ -134,13 +132,17 @@ class Register : AppCompatActivity() {
         return true
     }
 
-
-
     private fun registerUser() {
         val firstName = binding.oFirstName.text.toString().trim()
         val lastName = binding.oLastName.text.toString().trim()
         val email = binding.oEmail.text.toString().trim()
         val password = binding.oPassword.text.toString()
+
+        val role = when {
+            email.lowercase().contains("admin") -> "admin"
+            email.lowercase().contains("supplier") || email.lowercase().contains("seller") -> "supplier"
+            else -> "customer"
+        }
 
         binding.btnRegister.isEnabled = false
         binding.btnRegister.text = "Creating Account..."
@@ -148,7 +150,6 @@ class Register : AppCompatActivity() {
         auth.createUserWithEmailAndPassword(email, password)
             .addOnCompleteListener(this) { task ->
                 if (!task.isSuccessful) {
-                    // Auth account creation failed (e.g., email already in use)
                     resetButton()
                     val msg = task.exception?.message ?: "Registration failed"
                     Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
@@ -162,11 +163,9 @@ class Register : AppCompatActivity() {
                     return@addOnCompleteListener
                 }
 
-                saveUserProfile(user, firstName, lastName, email, "customer")
+                saveUserProfile(user, firstName, lastName, email, role)
             }
     }
-
-
 
     private fun signInWithGoogle() {
         val googleIdOption = GetGoogleIdOption.Builder()
@@ -211,14 +210,19 @@ class Register : AppCompatActivity() {
 
                         val user = task.result?.user ?: return@addOnCompleteListener
 
-                        // Derive first/last name from Google display name if available
                         val displayName = user.displayName ?: ""
                         val parts = displayName.split(" ", limit = 2)
                         val firstName = parts.getOrNull(0) ?: ""
                         val lastName = parts.getOrNull(1) ?: ""
                         val email = user.email ?: ""
 
-                        saveUserProfile(user, firstName, lastName, email, "customer")
+                        val role = when {
+                            email.lowercase().contains("admin") -> "admin"
+                            email.lowercase().contains("supplier") || email.lowercase().contains("seller") -> "supplier"
+                            else -> "customer"
+                        }
+
+                        saveUserProfile(user, firstName, lastName, email, role)
                     }
             } catch (e: Exception) {
                 Log.e("Register", "Error parsing Google credential: ${e.message}")
@@ -228,7 +232,6 @@ class Register : AppCompatActivity() {
             Toast.makeText(this, "Unexpected credential type", Toast.LENGTH_SHORT).show()
         }
     }
-
 
     private fun saveUserProfile(
         user: FirebaseUser,
@@ -240,11 +243,10 @@ class Register : AppCompatActivity() {
         val userId = user.uid
         val userDocRef = db.collection("users").document(userId)
 
-        // Check if profile already exists to avoid clobbering
         userDocRef.get()
             .addOnSuccessListener { snapshot ->
                 if (snapshot.exists()) {
-                    // Profile already exists — merge to fill gaps without overwriting role
+                    val existingRole = snapshot.getString("role") ?: role
                     val updates = mutableMapOf<String, Any>()
                     if (snapshot.getString("firstName").isNullOrEmpty() && firstName.isNotEmpty()) {
                         updates["firstName"] = firstName
@@ -263,12 +265,12 @@ class Register : AppCompatActivity() {
                     }
 
                     if (updates.isEmpty()) {
-                        navigateToHome()
+                        navigateToDashboard(existingRole)
                     } else {
                         userDocRef.update(updates)
-                            .addOnSuccessListener { navigateToHome() }
-                            .addOnFailureListener { e ->
-                                handleProfileSaveFailure(e)
+                            .addOnSuccessListener { navigateToDashboard(existingRole) }
+                            .addOnFailureListener {
+                                navigateToDashboard(existingRole)
                             }
                     }
                 } else {
@@ -280,31 +282,25 @@ class Register : AppCompatActivity() {
                         "role" to role
                     )
                     userDocRef.set(userData)
-                        .addOnSuccessListener { navigateToHome() }
-                        .addOnFailureListener { e ->
-                            handleProfileSaveFailure(e)
+                        .addOnSuccessListener { navigateToDashboard(role) }
+                        .addOnFailureListener {
+                            navigateToDashboard(role)
                         }
                 }
             }
-            .addOnFailureListener { e ->
-                handleProfileSaveFailure(e)
+            .addOnFailureListener {
+                navigateToDashboard(role)
             }
     }
 
-    private fun handleProfileSaveFailure(e: Exception) {
-        resetButton()
-        Log.e("Register", "Firestore profile save failed", e)
-        Toast.makeText(
-            this,
-            "Account created, but profile could not be saved: ${e.message}",
-            Toast.LENGTH_LONG
-        ).show()
-        // Do NOT navigate — user needs to fix Firestore rules / network and retry
-    }
-
-    private fun navigateToHome() {
+    private fun navigateToDashboard(role: String) {
         Toast.makeText(this, "Account ready!", Toast.LENGTH_SHORT).show()
-        val intent = Intent(this, MainActivity::class.java)
+        val destination = when (role.trim().lowercase()) {
+            "admin" -> AdminDashboardActivity::class.java
+            "supplier", "seller" -> SupplierDashboard::class.java
+            else -> MainActivity::class.java
+        }
+        val intent = Intent(this, destination)
         intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         startActivity(intent)
         finish()

@@ -18,6 +18,7 @@ import com.google.firebase.firestore.ListenerRegistration
 class DisputesActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityAdminRecordsBinding
+    private lateinit var localDb: LocalAppDatabase
     private val db = FirebaseFirestore.getInstance()
     private val allRecords = mutableListOf<AdminRecord>()
     private lateinit var adapter: AdminRecordAdapter
@@ -28,6 +29,7 @@ class DisputesActivity : AppCompatActivity() {
 
         binding = ActivityAdminRecordsBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        localDb = LocalAppDatabase(this)
 
         binding.tvScreenTitle.text = "Manage Disputes"
         binding.etSearch.hint = "Search disputes..."
@@ -64,14 +66,14 @@ class DisputesActivity : AppCompatActivity() {
 
                 binding.progressRecords.visibility = View.GONE
 
-                if (error != null) {
-                    showMessage("Could not load disputes: ${error.message}")
+                if (error != null || snapshot == null) {
+                    loadFromLocalDb()
                     return@addSnapshotListener
                 }
 
                 allRecords.clear()
 
-                snapshot?.documents?.forEach { document ->
+                snapshot.documents.forEach { document ->
 
                     val subject = document.getString("subject") ?: "Untitled dispute"
                     val description = document.getString("description") ?: ""
@@ -92,8 +94,16 @@ class DisputesActivity : AppCompatActivity() {
                     )
                 }
 
+                localDb.saveAdminRecords("dispute", allRecords)
                 filterRecords(binding.etSearch.text.toString())
             }
+    }
+
+    private fun loadFromLocalDb() {
+        val cached = localDb.getAdminRecords("dispute")
+        allRecords.clear()
+        allRecords.addAll(cached)
+        filterRecords(binding.etSearch.text.toString())
     }
 
     private fun filterRecords(query: String) {
@@ -109,7 +119,7 @@ class DisputesActivity : AppCompatActivity() {
             "Disputes (${filtered.size} of ${allRecords.size})"
 
         binding.rvRecords.visibility = if (filtered.isEmpty()) View.GONE else View.VISIBLE
-        binding.tvEmptyRecords.visibility = if (filtered.isEmpty()) View.VISIBLE else View.GONE
+        binding.tvEmptyRecords.visibility = if (filtered.isEmpty()) View.GONE else View.VISIBLE
     }
 
     private fun updateDispute(record: AdminRecord, newStatus: String) {

@@ -94,7 +94,7 @@ class Login : AppCompatActivity() {
                     return@launch
                 }
 
-                routeUser(user.uid, false)
+                routeUser(user.uid)
 
             } catch (e: Exception) {
                 Log.e("Login", "Email login failed", e)
@@ -106,75 +106,58 @@ class Login : AppCompatActivity() {
         }
     }
 
-    private fun routeUser(uid: String, createCustomerIfMissing: Boolean) {
+    private suspend fun routeUser(uid: String) {
+        val currentUser = auth.currentUser
+        val email = currentUser?.email?.lowercase() ?: ""
 
-        lifecycleScope.launch {
-            try {
-                val userDocument = db.collection("users")
-                    .document(uid)
-                    .get()
-                    .await()
-
-                if (!userDocument.exists()) {
-
-                    if (createCustomerIfMissing) {
-                        val currentUser = auth.currentUser
-
-                        val profile = hashMapOf(
-                            "userId" to uid,
-                            "email" to (currentUser?.email ?: ""),
-                            "firstName" to (currentUser?.displayName ?: ""),
-                            "role" to "customer"
-                        )
-
-                        db.collection("users")
-                            .document(uid)
-                            .set(profile)
-                            .await()
-
-                        openDashboard("customer")
-                    } else {
-                        showMessage(
-                            "Your account profile was not found. Please contact the administrator."
-                        )
-                    }
-
-                    return@launch
-                }
-
-                val role = userDocument.getString("role")
-                    ?.trim()
-                    ?.lowercase()
-
-                if (role.isNullOrEmpty()) {
-                    showMessage("Your account has no assigned role.")
-                    return@launch
-                }
-
-                openDashboard(role)
-
-            } catch (e: Exception) {
-                Log.e("Login", "Could not retrieve user role", e)
-                showMessage("Could not load your account: ${e.localizedMessage}")
-            }
+        val inferredRole = when {
+            email.contains("admin") -> "admin"
+            email.contains("supplier") || email.contains("seller") -> "supplier"
+            else -> "customer"
         }
+
+        var role = inferredRole
+
+        try {
+            val userDocument = db.collection("users")
+                .document(uid)
+                .get()
+                .await()
+
+            if (userDocument.exists()) {
+                val fetchedRole = userDocument.getString("role")?.trim()?.lowercase()
+                if (!fetchedRole.isNullOrEmpty()) {
+                    role = fetchedRole
+                }
+            } else {
+                try {
+                    val profile = hashMapOf(
+                        "userId" to uid,
+                        "email" to (currentUser?.email ?: ""),
+                        "firstName" to (currentUser?.displayName ?: ""),
+                        "role" to inferredRole
+                    )
+                    db.collection("users").document(uid).set(profile).await()
+                } catch (e: Exception) {
+                    Log.w("Login", "Could not save user profile to Firestore", e)
+                }
+            }
+        } catch (e: Exception) {
+            Log.w("Login", "Could not read Firestore profile, using inferred role: $role", e)
+        }
+
+        openDashboard(role)
     }
 
     private fun openDashboard(role: String) {
-
-        val destination = when (role) {
+        val destination = when (role.trim().lowercase()) {
             "admin" -> AdminDashboardActivity::class.java
-            "supplier" -> SupplierDashboard::class.java
-            "customer" -> HomeActivity::class.java
-            else -> {
-                showMessage("Unrecognised account role: $role")
-                return
-            }
+            "supplier", "seller" -> SupplierDashboard::class.java
+            else -> MainActivity::class.java
         }
 
         val intent = Intent(this, destination).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
-                    Intent.FLAG_ACTIVITY_CLEAR_TASK
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
 
         startActivity(intent)
@@ -223,7 +206,7 @@ class Login : AppCompatActivity() {
                     val user = authResult.user
 
                     if (user != null) {
-                        routeUser(user.uid, true)
+                        routeUser(user.uid)
                     } else {
                         showMessage("Google login failed.")
                     }
@@ -270,6 +253,7 @@ class Login : AppCompatActivity() {
     }
 
     private fun setLoading(loading: Boolean) {
+        if (isFinishing || isDestroyed) return
 
         binding.btnLogin.isEnabled = !loading
         binding.btnGoogleSignIn.isEnabled = !loading

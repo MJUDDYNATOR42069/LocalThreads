@@ -34,9 +34,7 @@ class HomeActivity : AppCompatActivity() {
         setupLanguageSelector()
     }
 
-    // ---------------------------------------------------------------
-    // RecyclerViews — same data source as HomeFragment
-    // ---------------------------------------------------------------
+
     private fun setupRecyclerViews() {
         binding.rvRecommended.layoutManager =
             LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
@@ -51,9 +49,7 @@ class HomeActivity : AppCompatActivity() {
         binding.rvPopular.adapter = ProductAdapter(ProductRepository.popular)
     }
 
-    // ---------------------------------------------------------------
-    // Buttons — "See All" navigates to ProductListActivity
-    // ---------------------------------------------------------------
+
     private fun setupButtons() {
         binding.btnMenu.setOnClickListener {
             Toast.makeText(this, "Menu clicked", Toast.LENGTH_SHORT).show()
@@ -76,9 +72,7 @@ class HomeActivity : AppCompatActivity() {
         }
     }
 
-    // ---------------------------------------------------------------
-    // Language selector
-    // ---------------------------------------------------------------
+
     private fun setupLanguageSelector() {
         binding.btnLanguage.setOnClickListener {
             val languages = arrayOf("English", "isiXhosa", "isiZulu")
@@ -99,9 +93,7 @@ class HomeActivity : AppCompatActivity() {
         }
     }
 
-    // ---------------------------------------------------------------
-    // Search
-    // ---------------------------------------------------------------
+
     private fun setupSearch() {
         binding.btnSearchIcon.setOnClickListener {
             val searchText = binding.etSearch.text.toString().trim()
@@ -113,9 +105,7 @@ class HomeActivity : AppCompatActivity() {
         }
     }
 
-    // ---------------------------------------------------------------
-    // Category chips
-    // ---------------------------------------------------------------
+
     private fun setupCategoryChips() {
         binding.chipAll.setOnClickListener {
             openProductList(ProductListActivity.CATEGORY_ALL)
@@ -138,9 +128,7 @@ class HomeActivity : AppCompatActivity() {
         }
     }
 
-    // ---------------------------------------------------------------
-    // Navigation helpers
-    // ---------------------------------------------------------------
+
     private fun openProductList(category: String) {
         startActivity(
             Intent(this, ProductListActivity::class.java).apply {
